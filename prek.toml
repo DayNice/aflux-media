@@ -1,0 +1,21 @@
+default_language_version.python = "3.12"
+
+[[repos]]
+repo = "builtin"
+hooks = [
+    { id = "trailing-whitespace", args = ["--markdown-linebreak-ext=md"]},
+    { id = "check-added-large-files" },
+    { id = "check-case-conflict" },
+    { id = "end-of-file-fixer" },
+    { id = "fix-byte-order-marker" },
+    { id = "check-toml" },
+    { id = "check-yaml" },
+]
+
+[[repos]]
+repo = "https://github.com/astral-sh/ruff-pre-commit"
+rev = "v0.15.18"
+hooks = [
+    { id = "ruff-check", args = ["--fix"] },
+    { id = "ruff-format" },
+]
