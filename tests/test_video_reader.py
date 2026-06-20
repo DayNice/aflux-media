@@ -5,8 +5,8 @@ import numpy as np
 import PIL.Image
 import pytest
 
-import aflux_video
-from aflux_video import VideoReader
+import aflux_media
+from aflux_media import VideoReader
 
 
 def _write_gradient_video(output_file: Path, num_frames: int) -> None:
@@ -14,7 +14,7 @@ def _write_gradient_video(output_file: Path, num_frames: int) -> None:
         PIL.Image.new("RGB", (128, 128), color=(v, v, v))
         for v in (round(255 * i / (num_frames - 1)) for i in range(num_frames))
     )
-    aflux_video.encode_images_into_mp4(images, output_file, fps=10)
+    aflux_media.encode_images_into_mp4(images, output_file, fps=10)
 
 
 @pytest.fixture(scope="session")
@@ -105,8 +105,8 @@ class TestVideoStatisticsMerge:
         red_image = PIL.Image.new("RGB", (128, 128), color=(255, 0, 0))
         blue_image = PIL.Image.new("RGB", (128, 128), color=(0, 0, 255))
 
-        aflux_video.encode_images_into_mp4([red_image] * 5, video_path1, fps=Fraction(30, 1))
-        aflux_video.encode_images_into_mp4([blue_image] * 5, video_path2, fps=Fraction(30, 1))
+        aflux_media.encode_images_into_mp4([red_image] * 5, video_path1, fps=Fraction(30, 1))
+        aflux_media.encode_images_into_mp4([blue_image] * 5, video_path2, fps=Fraction(30, 1))
 
         with VideoReader(video_path1) as reader1:
             stats1 = reader1.compute_statistics()
@@ -114,7 +114,7 @@ class TestVideoStatisticsMerge:
         with VideoReader(video_path2) as reader2:
             stats2 = reader2.compute_statistics()
 
-        merged_stats = aflux_video.merge_video_statistics_list([stats1, stats2])
+        merged_stats = aflux_media.merge_video_statistics_list([stats1, stats2])
 
         assert merged_stats.sample_size == stats1.sample_size + stats2.sample_size
 
@@ -137,7 +137,7 @@ class TestSmartCopyVideoSegment:
         """Mean intensity of each decoded frame, normalized to [0, 1]."""
         return [
             float(frame.to_ndarray(format="rgb24").mean()) / 255
-            for frame in aflux_video.decode_video_frames(video_file)
+            for frame in aflux_media.decode_video_frames(video_file)
         ]
 
     def test_segment(self, tmp_gradient_video: Path, tmp_path: Path) -> None:
@@ -158,7 +158,7 @@ class TestSmartCopyVideoSegment:
             from_index = keyframe_indices[from_keyframe_index] + from_offset
             to_index = keyframe_indices[to_keyframe_index] + to_offset
 
-            aflux_video.smart_copy_video_segment(tmp_gradient_video, output, from_index, to_index)
+            aflux_media.smart_copy_video_segment(tmp_gradient_video, output, from_index, to_index)
 
             with VideoReader(output) as reader:
                 assert reader.get_stream_info().num_frames == to_index - from_index
@@ -176,7 +176,7 @@ class TestSmartCopyVideoSegment:
 
         from_index = keyframe_indices[1]
         output = tmp_path / "out.mp4"
-        aflux_video.smart_copy_video_segment(tmp_keyframe_end_video, output, from_index, num_frames)
+        aflux_media.smart_copy_video_segment(tmp_keyframe_end_video, output, from_index, num_frames)
 
         means = self._decode_means(output)
         assert len(means) == num_frames - from_index
@@ -193,7 +193,7 @@ class TestSmartCopyVideoSegment:
         to_index = num_frames
 
         output = tmp_path / "out.mp4"
-        aflux_video.smart_copy_video_segment(tmp_gradient_video, output, from_index, to_index)
+        aflux_media.smart_copy_video_segment(tmp_gradient_video, output, from_index, to_index)
 
         means = self._decode_means(output)
         assert len(means) == to_index - from_index

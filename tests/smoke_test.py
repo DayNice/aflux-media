@@ -1,3 +1,3 @@
 # ruff: disable[F401]
-import aflux_video
+import aflux_media
 # ruff: enable[F401]

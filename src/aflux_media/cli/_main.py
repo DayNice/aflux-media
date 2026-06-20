@@ -1,0 +1,6 @@
+from cyclopts import App
+
+from ._video import app as video_app
+
+app = App(name="aflux-media", help="Interact with media files.")
+app.command(video_app, name="video")

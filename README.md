@@ -1,4 +1,4 @@
-# aflux-video
+# aflux-media
 
 ## License
 

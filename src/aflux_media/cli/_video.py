@@ -8,7 +8,7 @@ import rich.progress
 from cyclopts import App
 from rich.console import Console
 
-from aflux_video import (
+from aflux_media import (
     decode_video_frames,
     get_video_frame_infos,
     get_video_keyframe_infos,
@@ -17,7 +17,7 @@ from aflux_video import (
 
 from ._parameters import Indices, InputFile, OutputDir
 
-app = App(help="Inspect a video.")
+app = App(name="video", help="Inspect a video.")
 
 
 @app.command
