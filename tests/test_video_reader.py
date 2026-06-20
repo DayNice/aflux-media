@@ -14,7 +14,7 @@ def _write_gradient_video(output_file: Path, num_frames: int) -> None:
         PIL.Image.new("RGB", (128, 128), color=(v, v, v))
         for v in (round(255 * i / (num_frames - 1)) for i in range(num_frames))
     )
-    aflux_media.encode_images_into_mp4(images, output_file, fps=10)
+    aflux_media.encode_images_into_video(images, output_file, fps=10)
 
 
 @pytest.fixture(scope="session")
@@ -105,8 +105,8 @@ class TestVideoStatisticsMerge:
         red_image = PIL.Image.new("RGB", (128, 128), color=(255, 0, 0))
         blue_image = PIL.Image.new("RGB", (128, 128), color=(0, 0, 255))
 
-        aflux_media.encode_images_into_mp4([red_image] * 5, video_path1, fps=Fraction(30, 1))
-        aflux_media.encode_images_into_mp4([blue_image] * 5, video_path2, fps=Fraction(30, 1))
+        aflux_media.encode_images_into_video([red_image] * 5, video_path1, fps=Fraction(30, 1))
+        aflux_media.encode_images_into_video([blue_image] * 5, video_path2, fps=Fraction(30, 1))
 
         with VideoReader(video_path1) as reader1:
             stats1 = reader1.compute_statistics()

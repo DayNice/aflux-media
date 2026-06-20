@@ -139,7 +139,7 @@ def remux_video_into_mp4(
             output_container.mux(packet)
 
 
-def encode_images_into_mp4(
+def encode_images_into_video(
     images: Iterable[PIL.Image.Image],
     output_file: str | Path,
     *,
