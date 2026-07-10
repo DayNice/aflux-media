@@ -115,7 +115,7 @@ def remux_video_into_mp4(
 
         output_stream_map: dict[int, av.VideoStream | av.AudioStream] = {}
         for input_stream in input_streams:
-            output_stream = output_container.add_stream_from_template(input_stream)
+            output_stream = output_container.add_stream_from_template(input_stream, True)
             output_stream_map[input_stream.index] = output_stream
 
             # prevent timestamp drift
