@@ -162,7 +162,7 @@ def encode_images_into_video(
 
     if max_bits_per_pixel is None:
         num_pixels = sample_image.width * sample_image.height
-        max_bits_per_pixel = infer_target_bits_per_pixel(num_pixels, fps)
+        max_bits_per_pixel = infer_target_bits_per_pixel(num_pixels, fps) * 2
     max_bits_per_sec = sample_image.width * sample_image.height * fps * max_bits_per_pixel
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
