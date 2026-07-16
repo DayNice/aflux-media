@@ -166,6 +166,11 @@ def encode_images_into_video(
     max_bits_per_sec = sample_image.width * sample_image.height * fps * max_bits_per_pixel
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
+    timescale = 90000 if 90000 % fps == 0 else fps.numerator
+    while timescale < 10000:
+        timescale *= 2
+    time_base = Fraction(1, timescale)
+
     encoder_options = {
         "preset": "6",
         "crf": "26",
@@ -180,7 +185,7 @@ def encode_images_into_video(
         stream.height = sample_image.height
         stream.pix_fmt = "yuv420p10le"
         stream.gop_size = round(fps * 2)
-        stream.time_base = Fraction(1, 90000)
+        stream.time_base = time_base
 
         for image in images:
             frame = av.VideoFrame.from_image(image)
