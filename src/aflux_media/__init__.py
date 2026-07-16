@@ -3,6 +3,7 @@ from ._audio_helper import (
     encode_copy_audio_segment,
 )
 from ._audio_reader import AudioReader
+from ._media_helper import mux_audio_video
 from ._types import (
     AudioBlock,
     AudioStreamInfo,
@@ -50,6 +51,7 @@ __all__ = [
     "get_video_stream_info",
     "infer_target_bits_per_pixel",
     "merge_video_statistics_list",
+    "mux_audio_video",
     "mux_concat_videos",
     "mux_copy_video_segment",
     "remux_video_into_mp4",
