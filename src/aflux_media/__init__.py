@@ -1,4 +1,8 @@
+from ._audio_helper import encode_copy_audio_segment
+from ._audio_reader import AudioReader
 from ._types import (
+    AudioBlock,
+    AudioStreamInfo,
     VideoFrameInfo,
     VideoStatistics,
     VideoStreamInfo,
@@ -24,6 +28,9 @@ from ._video_reader import (
 )
 
 __all__ = [
+    "AudioBlock",
+    "AudioReader",
+    "AudioStreamInfo",
     "VideoFrameInfo",
     "VideoReader",
     "VideoStatistics",
@@ -31,6 +38,7 @@ __all__ = [
     "compute_video_statistics",
     "decode_video_frames",
     "encode_concat_videos",
+    "encode_copy_audio_segment",
     "encode_copy_video_segment",
     "encode_images_into_video",
     "get_video_frame_infos",
