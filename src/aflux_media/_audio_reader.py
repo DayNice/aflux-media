@@ -33,16 +33,19 @@ class AudioReader:
     ) -> AudioStreamInfo:
         assert stream.time_base is not None
 
-        num_samples = 0
-        for frame in container.decode(stream):
-            assert frame.pts is not None
-            frame_from_sample_index = round(frame.pts * stream.time_base * stream.rate)
-            frame_num_samples = frame.samples
-            if frame.duration is not None and frame.duration > 0:
-                frame_duration_num_samples = round(frame.duration * stream.time_base * stream.rate)
-                frame_num_samples = min(frame_num_samples, frame_duration_num_samples)
-            frame_to_sample_index = frame_from_sample_index + frame_num_samples
-            num_samples = max(num_samples, frame_to_sample_index)
+        if stream.duration is not None and stream.duration > 0:
+            num_samples = round(stream.duration * stream.time_base * stream.rate)
+        else:
+            num_samples = 0
+            for frame in container.decode(stream):
+                assert frame.pts is not None
+                frame_from_sample_index = round(frame.pts * stream.time_base * stream.rate)
+                frame_num_samples = frame.samples
+                if frame.duration is not None and frame.duration > 0:
+                    frame_duration_num_samples = round(frame.duration * stream.time_base * stream.rate)
+                    frame_num_samples = min(frame_num_samples, frame_duration_num_samples)
+                frame_to_sample_index = frame_from_sample_index + frame_num_samples
+                num_samples = max(num_samples, frame_to_sample_index)
 
         return AudioStreamInfo(
             sample_rate=stream.rate,

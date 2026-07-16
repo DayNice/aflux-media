@@ -15,7 +15,7 @@ def aac_file(tmp_path_factory: pytest.TempPathFactory) -> Path:
     sample_rate = 48000
     layout = "stereo"
 
-    with av.open(audio_file, "w", format="mp4") as container:
+    with av.open(audio_file, "w", format="mp4", options={"movie_timescale": str(sample_rate)}) as container:
         stream = container.add_stream("aac", rate=sample_rate)
         stream.layout = layout
 
