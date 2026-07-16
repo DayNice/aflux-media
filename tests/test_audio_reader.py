@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from pydantic import ValidationError
 
-from aflux_media import AudioBlock, AudioReader, encode_copy_audio_segment
+from aflux_media import AudioBlock, AudioReader, encode_concat_audios, encode_copy_audio_segment
 
 
 @pytest.fixture(scope="session")
@@ -15,7 +15,15 @@ def aac_file(tmp_path_factory: pytest.TempPathFactory) -> Path:
     sample_rate = 48000
     layout = "stereo"
 
-    with av.open(audio_file, "w", format="mp4", options={"movie_timescale": str(sample_rate)}) as container:
+    with av.open(
+        audio_file,
+        "w",
+        format="mp4",
+        options={
+            "movie_timescale": str(sample_rate),
+            "movflags": "faststart",
+        },
+    ) as container:
         stream = container.add_stream("aac", rate=sample_rate)
         stream.layout = layout
 
@@ -161,3 +169,47 @@ class TestEncodeCopyAudioSegment:
             encode_copy_audio_segment(aac_file, tmp_path / "out.m4a", 10, 10)
         with pytest.raises(ValueError, match="non-empty and non-negative"):
             encode_copy_audio_segment(aac_file, tmp_path / "out.m4a", 10, 9)
+
+
+class TestEncodeConcatAudios:
+    def test_valid_concat(self, aac_file: Path, tmp_path: Path) -> None:
+        output_file = tmp_path / "concat.m4a"
+        encode_concat_audios([aac_file, aac_file], output_file)
+
+        reader = AudioReader(output_file)
+        info = reader.get_stream_info()
+        assert info.num_samples == 4096
+
+        samples = []
+        for block in reader.decode_blocks(0, info.num_samples):
+            samples.append(block.samples)
+
+        concat_samples = np.concatenate(samples, axis=0)
+        assert concat_samples.shape == (4096, 2)
+        # Using a generous tolerance (0.20) since AAC is lossy and MDCT introduces boundary variations
+        np.testing.assert_allclose(concat_samples, 0.5, atol=0.20)
+
+    def test_invalid_arguments(self, aac_file: Path, tmp_path: Path) -> None:
+        output_file = tmp_path / "out.m4a"
+        with pytest.raises(ValueError, match="Should provide at least one audio"):
+            encode_concat_audios([], output_file)
+
+        # Create a mismatched file
+        mismatched_file = tmp_path / "mismatch.m4a"
+        sample_rate = 44100
+        with av.open(mismatched_file, "w", format="mp4") as container:
+            stream = container.add_stream("aac", rate=sample_rate)
+            stream.layout = "stereo"
+            stream.time_base = Fraction(1, sample_rate)
+            array = np.full((2, 1024), 0.5, dtype=np.float32)
+            frame = av.AudioFrame.from_ndarray(array, format="fltp", layout="stereo")
+            frame.sample_rate = sample_rate
+            frame.time_base = stream.time_base
+            frame.pts = 0
+            for packet in stream.encode(frame):
+                container.mux(packet)
+            for packet in stream.encode():
+                container.mux(packet)
+
+        with pytest.raises(ValueError, match="Found incompatible audios"):
+            encode_concat_audios([aac_file, mismatched_file], output_file)
