@@ -109,7 +109,7 @@ def remux_video_into_mp4(
 ) -> None:
     with (
         av.open(input_file) as input_container,
-        av.open(output_file, "w", format="mp4") as output_container,
+        av.open(output_file, "w", format="mp4", options={"movflags": "faststart"}) as output_container,
     ):
         input_streams = [el for el in input_container.streams if isinstance(el, (av.VideoStream, av.AudioStream))]
 
