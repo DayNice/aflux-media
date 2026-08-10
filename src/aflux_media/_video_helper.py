@@ -281,12 +281,30 @@ def encode_copy_video_segment(
             output_container.mux(packet)
 
 
+def _get_ffconcat_segment_start_time(packet: av.Packet) -> int:
+    for side_data in packet.iter_sidedata():
+        if side_data.data_type != "strings_metadata":
+            continue
+
+        values = bytes(side_data).split(b"\x00")
+        assert values[-1] == b"", "packet metadata should be null-terminated."
+
+        metadata = dict(zip(values[:-1:2], values[1:-1:2], strict=True))
+        for key in (b"lavf.concatdec.start_time", b"lavf.concat.start_time"):
+            if (start_time := metadata.get(key)) is None:
+                continue
+            return int(start_time)
+
+    raise ValueError("Packet does not contain ffconcat segment start time.")
+
+
 def mux_concat_videos(
     input_files: Iterable[str | Path],
     output_file: str | Path,
 ) -> None:
-    """Concatenate videos using a demuxer.
+    """Concatenate compatible videos by remuxing packets.
 
+    Videos must start at timestamp zero and have a constant frame rate.
     The following attributes must be same for all input videos:
       - frame rate
       - time base
@@ -299,19 +317,57 @@ def mux_concat_videos(
     if len(input_files) == 0:
         raise ValueError("Provide at least one video file.")
 
-    stream_info = get_video_stream_info(input_files[0])
-    for input_file in input_files[1:]:
-        other_stream_info = get_video_stream_info(input_file)
+    input_stream_infos = []
+    input_frame_pts_pairs = []
+    for input_file in input_files:
+        with VideoReader(input_file) as input_reader:
+            input_stream_info = input_reader.get_stream_info()
+            first_frame_info = input_reader.get_frame_info(0)
+            last_frame_info = input_reader.get_frame_info(input_stream_info.num_frames - 1)
+
+        input_stream_infos.append(input_stream_info)
+        input_frame_pts_pairs.append((first_frame_info.pts, last_frame_info.pts))
+
+    ref_stream_info = input_stream_infos[0]
+    ref_input_file = input_files[0]
+    for input_index, input_file in enumerate(input_files[1:], start=1):
+        other_stream_info = input_stream_infos[input_index]
         if (
-            other_stream_info.fps != stream_info.fps
-            or other_stream_info.time_base != stream_info.time_base
-            or other_stream_info.height != stream_info.height
-            or other_stream_info.width != stream_info.width
-            or other_stream_info.codec != stream_info.codec
-            or other_stream_info.pixel_format != stream_info.pixel_format
+            other_stream_info.fps != ref_stream_info.fps
+            or other_stream_info.time_base != ref_stream_info.time_base
+            or other_stream_info.height != ref_stream_info.height
+            or other_stream_info.width != ref_stream_info.width
+            or other_stream_info.codec != ref_stream_info.codec
+            or other_stream_info.pixel_format != ref_stream_info.pixel_format
         ):
-            msg = f"Found incompatible videos: {input_file} {input_files[0]}"
+            msg = f"Found incompatible videos: {input_file} {ref_input_file}"
             raise ValueError(msg)
+
+    pts_per_frame = 1 / (ref_stream_info.fps * ref_stream_info.time_base)
+    if pts_per_frame.denominator != 1:
+        msg = (
+            "Frame rate and time base should produce an integer number of pts per frame: "
+            f"fps={ref_stream_info.fps}, time_base={ref_stream_info.time_base}, pts_per_frame={pts_per_frame}"
+        )
+        raise ValueError(msg)
+    pts_per_frame = pts_per_frame.numerator
+
+    for input_index, input_file in enumerate(input_files):
+        input_stream_info = input_stream_infos[input_index]
+        first_pts, last_pts = input_frame_pts_pairs[input_index]
+        expected_last_pts = (input_stream_info.num_frames - 1) * pts_per_frame
+        if first_pts != 0 or last_pts != expected_last_pts:
+            msg = (
+                f"Input video timestamps should start at 0 and end at {expected_last_pts}: "
+                f"input_file={input_file}, first_pts={first_pts}, last_pts={last_pts}"
+            )
+            raise ValueError(msg)
+
+    input_start_pts_list = []
+    offset_pts = 0
+    for input_stream_info in input_stream_infos:
+        input_start_pts_list.append(offset_pts)
+        offset_pts += input_stream_info.num_frames * pts_per_frame
 
     with contextlib.ExitStack() as stack:
         ffconcat_file = stack.enter_context(tempfile.NamedTemporaryFile(delete_on_close=False))
@@ -320,7 +376,11 @@ def mux_concat_videos(
 
         try:
             input_container = stack.enter_context(
-                av.open(ffconcat_file, format="concat", options={"safe": "0"}),
+                av.open(
+                    ffconcat_file,
+                    format="concat",
+                    options={"safe": "0", "segment_time_metadata": "1"},
+                ),
             )
         except av.error.FileNotFoundError as e:
             # NOTE: error is misleading in that it broadly handles cases where the ffconcat content is incorrect
@@ -336,19 +396,42 @@ def mux_concat_videos(
         output_stream = output_container.add_stream_from_template(
             input_stream,
             True,
-            rate=stream_info.fps,
-            time_base=stream_info.time_base,
-            width=stream_info.width,
-            height=stream_info.height,
-            pix_fmt=stream_info.pixel_format,
+            rate=ref_stream_info.fps,
+            time_base=ref_stream_info.time_base,
+            width=ref_stream_info.width,
+            height=ref_stream_info.height,
+            pix_fmt=ref_stream_info.pixel_format,
         )
+
+        input_index = -1
+        curr_segment_start_time = None
+        pts_offset = 0
         for packet in input_container.demux(input_stream):
             # ignore 'flush packet'
             if packet.size == 0 and packet.dts is None and packet.pts is None:
                 continue
+
+            packet_segment_start_time = _get_ffconcat_segment_start_time(packet)
+
+            if packet_segment_start_time != curr_segment_start_time:
+                input_index += 1
+                assert input_index < len(input_stream_infos), "Packet should belong to an input video."
+                curr_segment_start_time = packet_segment_start_time
+
+                segment_start_pts = Fraction(curr_segment_start_time, 1_000_000) / ref_stream_info.time_base
+                segment_start_pts = math.floor(segment_start_pts + Fraction(1, 2))
+
+                # ffconcat relies on container duration metadata to decide `segment_start_pts`
+                # which might not be an exact multiple of `pts_per_frame`
+                pts_offset = input_start_pts_list[input_index] - segment_start_pts
+
+            assert packet.pts is not None, "Packet should have a valid pts."
+            packet.pts += pts_offset
             packet.dts = None  # re-generate dts value
             packet.stream = output_stream
             output_container.mux(packet)
+
+        assert input_index == len(input_files) - 1, "ffconcat output should contain every input video."
 
 
 def encode_concat_videos(
