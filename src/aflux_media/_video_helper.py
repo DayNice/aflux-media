@@ -103,6 +103,14 @@ def infer_target_bits_per_pixel(
     return bits_per_pixel
 
 
+def _infer_time_base_for_fps(fps: int | Fraction) -> Fraction:
+    timescale = 90000 if 90000 % fps == 0 else fps.numerator
+    # same logic as ffmpeg does internally
+    while timescale < 10000:
+        timescale *= 2
+    return Fraction(1, timescale)
+
+
 def remux_video_into_mp4(
     input_file: str | Path,
     output_file: str | Path,
@@ -121,8 +129,8 @@ def remux_video_into_mp4(
             # prevent timestamp drift
             match input_stream:
                 case av.VideoStream():
-                    # 90,000Hz
-                    output_stream.time_base = Fraction(1, 90000)
+                    assert input_stream.rate is not None
+                    output_stream.time_base = _infer_time_base_for_fps(input_stream.rate)
                 case av.AudioStream():
                     output_stream.time_base = Fraction(1, input_stream.rate)
                 case _:
@@ -166,10 +174,7 @@ def encode_images_into_video(
     max_bits_per_sec = sample_image.width * sample_image.height * fps * max_bits_per_pixel
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
-    timescale = 90000 if 90000 % fps == 0 else fps.numerator
-    while timescale < 10000:
-        timescale *= 2
-    time_base = Fraction(1, timescale)
+    time_base = _infer_time_base_for_fps(fps)
 
     encoder_options = {
         "preset": "6",
@@ -468,7 +473,7 @@ def encode_concat_videos(
     fps = stream_info.fps
     width = stream_info.width
     height = stream_info.height
-    time_base = Fraction(1, 90000)
+    time_base = _infer_time_base_for_fps(stream_info.fps)
     pixel_format = "yuv420p10le"
 
     num_pixels = width * height
