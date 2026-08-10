@@ -1,6 +1,7 @@
 from fractions import Fraction
 from pathlib import Path
 
+import av
 import numpy as np
 import PIL.Image
 import pytest
@@ -200,3 +201,67 @@ class TestSmartCopyVideoSegment:
         for k, mean in enumerate(means):
             expected = (from_index + k) / (num_frames - 1)
             assert mean == pytest.approx(expected, abs=0.04)
+
+
+class TestMuxConcatVideos:
+    @staticmethod
+    def _write_h264_gop_video(output_file: Path, num_frames: int) -> None:
+        with av.open(output_file, "w", format="mp4") as container:
+            stream = container.add_stream("libx264", rate=30, options={"bf": "2"})
+            stream.width = 64
+            stream.height = 64
+            stream.pix_fmt = "yuv420p"
+            stream.gop_size = 60
+            stream.time_base = Fraction(1, 15360)
+
+            for index in range(num_frames):
+                image = PIL.Image.new("RGB", (64, 64), color=(0, 0, 0))
+                frame = av.VideoFrame.from_image(image)
+                frame.pts = index * 512
+                frame.time_base = Fraction(1, 15360)
+                for packet in stream.encode(frame):
+                    container.mux(packet)
+
+            for packet in stream.encode():
+                container.mux(packet)
+
+    @pytest.fixture
+    def tmp_video_with_inaccurate_container_duration(
+        self,
+        tmp_path_factory: pytest.TempPathFactory,
+    ) -> Path:
+        input_dir = tmp_path_factory.mktemp("h264_inaccurate_duration")
+        input_file = input_dir / "input.mp4"
+        self._write_h264_gop_video(input_file, 121)
+        input_info = aflux_media.get_video_stream_info(input_file)
+
+        with av.open(input_file) as input_container:
+            input_stream = input_container.streams.video[0]
+            pts_per_frame = 1 / (input_info.fps * input_info.time_base)
+            assert pts_per_frame.denominator == 1
+            assert input_stream.duration != input_info.num_frames * pts_per_frame.numerator
+
+        return input_file
+
+    def test_preserves_pts_per_frame(
+        self,
+        tmp_video_with_inaccurate_container_duration: Path,
+    ) -> None:
+        input_file = tmp_video_with_inaccurate_container_duration
+        input_stream_info = aflux_media.get_video_stream_info(input_file)
+
+        pts_per_frame = 1 / (input_stream_info.fps * input_stream_info.time_base)
+        assert pts_per_frame.denominator == 1
+        pts_per_frame = pts_per_frame.numerator
+
+        output_file = input_file.parent / "output.mp4"
+        aflux_media.mux_concat_videos([input_file, input_file], output_file)
+
+        output_stream_info = aflux_media.get_video_stream_info(output_file)
+        assert output_stream_info.fps == input_stream_info.fps
+        assert output_stream_info.time_base == input_stream_info.time_base
+        assert output_stream_info.num_frames == input_stream_info.num_frames * 2
+
+        frame_infos = aflux_media.get_video_frame_infos(output_file)
+        frame_pts_list = [frame.pts for frame in frame_infos]
+        assert frame_pts_list == [i * pts_per_frame for i in range(output_stream_info.num_frames)]
