@@ -32,9 +32,9 @@ class VideoReader:
         self._stream.thread_type = "AUTO"
 
         # preload attributes to prevent implicit seek while demuxing or decoding
-        self._first_keyframe_pts
-        self._last_keyframe_pts
-        self._stream_info
+        self._first_keyframe_pts  # ruff: ignore[B018]
+        self._last_keyframe_pts  # ruff: ignore[B018]
+        self._stream_info  # ruff: ignore[B018]
 
     def _seek_pts(self, pts: int, *, backward: bool = True) -> bool:
         try:

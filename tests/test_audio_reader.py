@@ -1,3 +1,4 @@
+import itertools
 from fractions import Fraction
 from pathlib import Path
 
@@ -98,7 +99,7 @@ class TestAudioReader:
                 assert block.num_samples <= 1000
                 assert block.to_sample_index == info.num_samples
 
-        for previous, current in zip(blocks, blocks[1:], strict=False):
+        for previous, current in itertools.pairwise(blocks):
             assert previous.to_sample_index == current.from_sample_index
 
     def test_decode_blocks_slicing(self, aac_file: Path) -> None:

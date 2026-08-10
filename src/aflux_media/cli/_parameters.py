@@ -1,5 +1,6 @@
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Annotated, Sequence, assert_never
+from typing import Annotated, assert_never
 
 import cyclopts
 from cyclopts import Parameter, Token, validators

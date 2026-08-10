@@ -1,7 +1,6 @@
 from collections.abc import Iterator
 from fractions import Fraction
 from pathlib import Path
-from typing import cast
 
 import av
 import numpy as np
@@ -79,7 +78,7 @@ class AudioReader:
             array = array.reshape(frame.samples, self._stream_info.num_channels)
         array = array[:num_samples]
 
-        return cast(npt.NDArray[np.float32], np.ascontiguousarray(array, dtype=np.float32))
+        return np.ascontiguousarray(array, dtype=np.float32)
 
     def get_stream_info(self) -> AudioStreamInfo:
         return self._stream_info
