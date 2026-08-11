@@ -129,8 +129,8 @@ def remux_video_into_mp4(
             # prevent timestamp drift
             match input_stream:
                 case av.VideoStream():
-                    assert input_stream.rate is not None
-                    output_stream.time_base = _infer_time_base_for_fps(input_stream.rate)
+                    assert input_stream.average_rate is not None
+                    output_stream.time_base = _infer_time_base_for_fps(input_stream.average_rate)
                 case av.AudioStream():
                     output_stream.time_base = Fraction(1, input_stream.rate)
                 case _:
