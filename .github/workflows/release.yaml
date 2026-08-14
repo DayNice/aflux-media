@@ -22,6 +22,24 @@ jobs:
         with:
           enable-cache: true
 
+      - name: Check release name and tag
+        env:
+          RELEASE_NAME: ${{ github.event.release.name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          project_version="$(uv version --short --project .)"
+          expected_release="v${project_version}"
+
+          if [[ "$RELEASE_NAME" != "$expected_release" ]]; then
+            echo "Release name '$RELEASE_NAME' does not match expected release '$expected_release'."
+            exit 1
+          fi
+
+          if [[ "$RELEASE_TAG" != "$expected_release" ]]; then
+            echo "Release tag '$RELEASE_TAG' does not match expected release '$expected_release'."
+            exit 1
+          fi
+
       - name: Build
         run: uv build
 
